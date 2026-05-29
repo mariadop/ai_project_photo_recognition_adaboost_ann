@@ -1,39 +1,44 @@
 from scipy.ndimage import rotate, shift
 import numpy as np
-import pandas as pd
 
 def augment_image_flat(x):
     img = x.reshape(24, 24)
 
-    # mały obrót
     angle = np.random.uniform(-5, 5)
     img = rotate(img, angle, reshape=False, mode="nearest")
 
-    # małe przesunięcie max 1-2 piksele
     dx = np.random.uniform(-1, 1)
     dy = np.random.uniform(-1, 1)
     img = shift(img, shift=(dy, dx), mode="nearest")
 
     return img.reshape(-1)
 
+def augment_df(X_train, y_train, min_target=100, max_target=160):
+    X_train = np.asarray(X_train)
+    y_train = np.asarray(y_train).ravel()
 
-def augument_df(X_train, y_train):
-    X_aug = [X_train]
-    y_aug = [y_train]
-
+    X_new = []
+    y_new = []
 
     unique_classes, counts = np.unique(y_train, return_counts=True)
-    target = counts.max()
-    for y, count in zip(unique_classes,counts):
-       X = X_train[y_train==y]
-       to_fill = target-count
-       new_img = []
-       for c in range(to_fill):
-            img = X[np.random.randint(len(X))]
-            new_img.append(augment_image_flat(img))
-       if len(new_img)>0:
-            X_aug.append(np.array(new_img))
-            y_aug.append(np.full(to_fill, y))         
 
-    return np.vstack(X_aug), np.concatenate(y_aug)
-    
+    for cls, count in zip(unique_classes, counts):
+        X_cls = X_train[y_train == cls]
+        n = len(X_cls)
+
+        if n > max_target:
+            idx = np.random.choice(n, size=max_target, replace=False)
+            X_cls_final = X_cls[idx]
+        elif n < min_target:
+            to_fill = min_target - n
+            idx = np.random.choice(n, size=to_fill, replace=True)
+            aug = np.array([augment_image_flat(X_cls[i]) for i in idx])
+            X_cls_final = np.vstack([X_cls, aug])
+        else:
+            X_cls_final = X_cls
+
+        X_new.append(X_cls_final)
+        y_new.append(np.full(len(X_cls_final), cls))
+
+
+    return np.vstack(X_new), np.concatenate(y_new)
